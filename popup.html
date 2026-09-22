@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quotex Bot</title>
+    <link rel="stylesheet" href="popup.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Extra styles specific to Quotex patterns */
+        .candle-G { background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; color: #22c55e; }
+        .candle-R { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #ef4444; }
+        .candle-box { width: 22px; height: 28px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; margin-right: 4px; }
+        .btn-green { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
+        .btn-red { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ── Header ── -->
+    <header>
+        <div class="logo-area">
+            <div class="radar-ring">
+                <div class="radar-dot"></div>
+            </div>
+            <div class="logo-text">
+                <h1>Quotex Radar</h1>
+                <span class="logo-sub">Trading Bot</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <button id="clean-all-btn" class="text-btn" title="Clear all logs">🧹 Clean All</button>
+            <button id="toggle-btn" class="btn-header">▶ Start</button>
+        </div>
+    </header>
+
+    <!-- ── Tabs ── -->
+    <div class="tab-bar">
+        <button class="tab-btn active" data-tab="patterns">🧩 Patterns</button>
+        <button class="tab-btn" data-tab="settings">⚙️ Settings</button>
+        <button class="tab-btn" data-tab="log">📋 Log</button>
+    </div>
+
+    <!-- ══════ TAB: Patterns ══════ -->
+    <div class="tab-content active" id="tab-patterns">
+        
+        <div class="section-label">➕ New Pattern</div>
+        <div class="row">
+            <div class="input-group">
+                <label for="patternName">Pattern Name</label>
+                <input type="text" id="patternName" placeholder="e.g. 8 Reds Strategy">
+            </div>
+        </div>
+
+        <div class="row" style="margin-top: 5px;">
+            <button id="addGreenBtn" class="btn-primary btn-green" style="flex: 1;">🟢 Green</button>
+            <button id="addRedBtn" class="btn-primary btn-red" style="flex: 1;">🔴 Red</button>
+            <button id="clearBtn" class="btn-primary" style="flex: 0.5; background: #2a3544;">Undo</button>
+        </div>
+
+        <div class="input-group" style="margin-top: 10px;">
+            <div id="sequenceDisplay" style="min-height: 40px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+                <span class="hint" id="emptyText" style="margin: auto;">No candles added</span>
+            </div>
+        </div>
+        
+        <button id="savePatternBtn" class="btn-primary" style="margin-top: 10px;">💾 Save Pattern</button>
+
+        <div class="divider" style="margin: 15px 0 10px;"></div>
+        <div class="section-label">📋 Saved Patterns</div>
+        <div id="patternsList" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Generated via JS -->
+        </div>
+
+    </div>
+
+    <!-- ══════ TAB: Settings ══════ -->
+    <div class="tab-content" id="tab-settings">
+        <div class="section-label">📲 Telegram Settings</div>
+        
+        <div class="toggle-row" style="margin-bottom: 12px; margin-top: 5px;">
+            <label class="toggle-label" for="enableTelegram">
+                <input type="checkbox" id="enableTelegram">
+                <span class="toggle-text">Enable Telegram Alerts</span>
+            </label>
+        </div>
+
+        <div id="telegramInputs" style="display: none; opacity: 0.5;">
+            <div class="input-group" style="margin-bottom: 12px;">
+                <label for="botToken">Bot Token <span class="hint">(@BotFather)</span></label>
+                <input type="password" id="botToken" placeholder="123456789:ABCDefgh...">
+            </div>
+
+            <div class="input-group" style="margin-bottom: 15px;">
+                <label for="chatId">Chat ID</label>
+                <input type="text" id="chatId" placeholder="e.g. 987654321">
+            </div>
+        </div>
+
+        <button id="saveSettingsBtn" class="btn-primary">Update Settings</button>
+
+        <div class="mode-info" style="margin-top: 20px;">
+            <span class="mode-info-icon">💡</span>
+            <p><strong>Note:</strong> Bot tabhi kaam karega jab aap Quotex open karke <strong>Start Bot</strong> button click karenge. Alerts seedha Telegram par ayenge.</p>
+        </div>
+    </div>
+
+    <!-- ══════ TAB: Log ══════ -->
+    <div class="tab-content" id="tab-log">
+        <div class="log-toolbar">
+            <span class="log-title">Activity Log</span>
+            <button id="clear-log-btn" class="text-btn">Clear Log</button>
+        </div>
+        <div id="log-container">
+            <p class="log-entry">Waiting for start...</p>
+        </div>
+    </div>
+
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

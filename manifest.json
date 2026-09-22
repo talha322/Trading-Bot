@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "Quotex Pattern Alert Bot",
+  "version": "1.0",
+  "description": "Monitors Quotex charts and sends Telegram alerts based on custom candle patterns.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "tabs",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "*://*.qxbroker.com/*",
+    "*://*.quotex.io/*",
+    "*://*.market-qx.trade/*",
+    "https://api.telegram.org/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Quotex Bot Settings"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.qxbroker.com/*",
+        "*://*.quotex.io/*",
+        "*://*.market-qx.trade/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "*://*.qxbroker.com/*",
+        "*://*.quotex.io/*",
+        "*://*.market-qx.trade/*"
+      ],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["inject.js"],
+      "matches": [
+        "*://*.qxbroker.com/*",
+        "*://*.quotex.io/*",
+        "*://*.market-qx.trade/*"
+      ]
+    }
+  ]
+}
