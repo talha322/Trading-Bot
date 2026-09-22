@@ -44,6 +44,14 @@ window.addEventListener('message', function(event) {
       });
       
       const sortedTimes = Object.keys(grouped).sort();
+      
+      // Sab se aakhri time wali candle abhi chal rahi hai (incomplete). 
+      // Isay history se nikal kar live 'ticks' mein daal dete hain taake live stream isay poora kare.
+      const currentIncompleteTime = sortedTimes.pop();
+      if (currentIncompleteTime) {
+        ticks = [ { time: parseInt(currentIncompleteTime), prices: grouped[currentIncompleteTime] } ];
+      }
+
       candles = []; 
       sortedTimes.forEach(t => {
         const prices = grouped[t];
@@ -52,7 +60,8 @@ window.addEventListener('message', function(event) {
         candles.push(close >= open ? 'G' : 'R');
       });
       
-      addAppLog(`Loaded ${candles.length} history candles for ${currentAsset}`, 'normal');
+      const historyEmojis = candles.map(c => c === 'G' ? '🟢' : '🔴').join('');
+      addAppLog(`Loaded ${candles.length} history candles for ${currentAsset}: ${historyEmojis}`, 'normal');
       checkPatterns(candles, currentAsset);
     } 
     // --- 2. LIVE TICK DATA ---
