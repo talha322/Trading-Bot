@@ -36,17 +36,5 @@
   }
   window.WebSocket = WSHook;
 
-  // 2. Hook XMLHttpRequest just in case data comes from polling
-  const OrigXHR = window.XMLHttpRequest;
-  window.XMLHttpRequest = function() {
-      const xhr = new OrigXHR();
-      xhr.addEventListener('load', function() {
-          if (xhr.responseText && (xhr.responseText.includes('history') || xhr.responseText.includes('candles'))) {
-              console.log("📥 XHR DATA:", xhr.responseText.substring(0, 150));
-          }
-      });
-      return xhr;
-  };
-
   console.log("🛠️ Quotex Bot: Hooks Installed Successfully!");
 })();

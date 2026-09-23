@@ -14,6 +14,7 @@ tabs.forEach(tab => {
 // DOM Elements
 const toggleBtn = document.getElementById('toggle-btn');
 const enableTelegramCheck = document.getElementById('enableTelegram');
+const enableAutoTradeCheck = document.getElementById('enableAutoTrade');
 const telegramInputs = document.getElementById('telegramInputs');
 const botTokenInput = document.getElementById('botToken');
 const chatIdInput = document.getElementById('chatId');
@@ -57,7 +58,7 @@ function updateDirUI(dir) {
 dirUpBtn.addEventListener('click', () => updateDirUI('UP'));
 dirDownBtn.addEventListener('click', () => updateDirUI('DOWN'));
 
-// Telegram toggle UI update
+// Telegram toggle UI update & Auto-save
 enableTelegramCheck.addEventListener('change', (e) => {
   if (e.target.checked) {
     telegramInputs.style.display = 'block';
@@ -66,6 +67,17 @@ enableTelegramCheck.addEventListener('change', (e) => {
     telegramInputs.style.display = 'none';
     telegramInputs.style.opacity = '0.5';
   }
+  
+  chrome.storage.local.set({ enableTelegram: e.target.checked }, () => {
+    addLog(`Telegram Alerts are now ${e.target.checked ? 'ON' : 'OFF'}`);
+  });
+});
+
+// Auto-save Auto-Trade toggle immediately
+enableAutoTradeCheck.addEventListener('change', (e) => {
+  chrome.storage.local.set({ autoTradeEnabled: e.target.checked }, () => {
+    addLog(`Auto-Trade is now ${e.target.checked ? 'ON' : 'OFF'}`);
+  });
 });
 
 // Logging function
@@ -113,13 +125,16 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 
 // Load Initial Data
-chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram', 'savedPatterns', 'botRunning'], (result) => {
+chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram', 'autoTradeEnabled', 'savedPatterns', 'botRunning'], (result) => {
   if (result.telegramBotToken) botTokenInput.value = result.telegramBotToken;
   if (result.telegramChatId) chatIdInput.value = result.telegramChatId;
   if (result.enableTelegram) {
      enableTelegramCheck.checked = true;
      telegramInputs.style.display = 'block';
      telegramInputs.style.opacity = '1';
+  }
+  if (result.autoTradeEnabled) {
+     enableAutoTradeCheck.checked = true;
   }
   
   isRunning = result.botRunning || false;
@@ -166,13 +181,14 @@ function updateUIState() {
 saveSettingsBtn.addEventListener('click', () => {
   chrome.storage.local.set({
     enableTelegram: enableTelegramCheck.checked,
+    autoTradeEnabled: enableAutoTradeCheck.checked,
     telegramBotToken: botTokenInput.value.trim(),
     telegramChatId: chatIdInput.value.trim()
   }, () => {
     const orig = saveSettingsBtn.innerText;
     saveSettingsBtn.innerText = "Updated! ✅";
     setTimeout(() => saveSettingsBtn.innerText = orig, 2000);
-    addLog("Settings updated.");
+    addLog(`Settings updated. Auto-Trade: ${enableAutoTradeCheck.checked ? 'ON' : 'OFF'}`);
   });
 });
 

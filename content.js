@@ -116,7 +116,7 @@ function addAppLog(message, type = 'normal') {
 }
 
 function checkPatterns(candleColors, asset) {
-  chrome.storage.local.get(['savedPatterns', 'telegramBotToken', 'telegramChatId', 'enableTelegram', 'botRunning'], (result) => {
+  chrome.storage.local.get(['savedPatterns', 'telegramBotToken', 'telegramChatId', 'enableTelegram', 'autoTradeEnabled', 'botRunning'], (result) => {
     
     if (!result.botRunning) return;
 
@@ -140,16 +140,45 @@ function checkPatterns(candleColors, asset) {
         }
         
         if (isMatch) {
-          const now = Date.now();
-          if (now - lastSentAlertTime > 60000) {
-            addAppLog(`Match Found! ${pattern.name} on ${asset}`, 'match');
-            sendTelegramAlert(pattern.name, asset, recentColors, result.telegramBotToken, result.telegramChatId, result.enableTelegram);
-            lastSentAlertTime = now;
+          addAppLog(`🎯 Pattern Matched: "${pattern.name}" (Asset: ${asset})`, 'match');
+          
+          // 🔥 AUTOMATIC TRADE EXECUTION 🔥
+          if (pattern.action && result.autoTradeEnabled) {
+             executeTrade(pattern.action);
+          } else if (pattern.action && !result.autoTradeEnabled) {
+             addAppLog(`🔔 Auto-Trade is OFF. Manual action required.`, 'normal');
           }
+
+          sendTelegramAlert(pattern.name, asset, recentColors, result.telegramBotToken, result.telegramChatId, result.enableTelegram);
         }
       }
     });
   });
+}
+
+function executeTrade(action) {
+  try {
+    const textToFind = action === 'UP' ? 'Up' : 'Down';
+    
+    // Find all spans and locate the one containing the text "Up" or "Down"
+    const spans = Array.from(document.querySelectorAll('span'));
+    const targetSpan = spans.find(span => span.innerText.trim() === textToFind);
+    
+    if (targetSpan) {
+      // Find the parent button of this span
+      const btn = targetSpan.closest('button');
+      if (btn) {
+        btn.click();
+        addAppLog(`⚡ Auto-Trade Executed: ${action} Button Clicked!`, 'match');
+      } else {
+        addAppLog(`❌ Trade Error: Button for ${action} not clickable.`, 'warn');
+      }
+    } else {
+      addAppLog(`❌ Trade Error: Could not find ${action} on screen.`, 'warn');
+    }
+  } catch (e) {
+    addAppLog(`❌ Trade Error: Exception occurred during click.`, 'warn');
+  }
 }
 
 function playPing() {
