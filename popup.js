@@ -27,6 +27,9 @@ const sequenceDisplay = document.getElementById('sequenceDisplay');
 const savePatternBtn = document.getElementById('savePatternBtn');
 const patternsList = document.getElementById('patternsList');
 
+const dirUpBtn = document.getElementById('dirUpBtn');
+const dirDownBtn = document.getElementById('dirDownBtn');
+
 const logContainer = document.getElementById('log-container');
 const clearLogBtn = document.getElementById('clear-log-btn');
 const headerCleanAllBtn = document.getElementById('clean-all-btn');
@@ -34,6 +37,25 @@ const headerCleanAllBtn = document.getElementById('clean-all-btn');
 let currentSequence = [];
 let isRunning = false;
 let editingPatternIndex = null;
+let tradeDirection = 'UP'; // UP or DOWN
+
+function updateDirUI(dir) {
+  tradeDirection = dir;
+  if (dir === 'UP') {
+    dirUpBtn.style.border = '2px solid #10b981';
+    dirUpBtn.style.color = '#10b981';
+    dirDownBtn.style.border = '1px solid var(--border)';
+    dirDownBtn.style.color = 'var(--text3)';
+  } else {
+    dirDownBtn.style.border = '2px solid #ef4444';
+    dirDownBtn.style.color = '#ef4444';
+    dirUpBtn.style.border = '1px solid var(--border)';
+    dirUpBtn.style.color = 'var(--text3)';
+  }
+}
+
+dirUpBtn.addEventListener('click', () => updateDirUI('UP'));
+dirDownBtn.addEventListener('click', () => updateDirUI('DOWN'));
 
 // Telegram toggle UI update
 enableTelegramCheck.addEventListener('change', (e) => {
@@ -185,6 +207,7 @@ clearBtn.addEventListener('click', () => {
   patternNameInput.value = '';
   editingPatternIndex = null;
   savePatternBtn.innerText = "💾 Save Pattern";
+  updateDirUI('UP');
   updateSequenceDisplay();
 });
 
@@ -198,6 +221,7 @@ savePatternBtn.addEventListener('click', () => {
   const newPattern = {
     name: name,
     sequence: [...currentSequence],
+    action: tradeDirection,
     active: true
   };
 
@@ -218,6 +242,7 @@ savePatternBtn.addEventListener('click', () => {
       currentSequence = [];
       editingPatternIndex = null;
       savePatternBtn.innerText = "💾 Save Pattern";
+      updateDirUI('UP');
       updateSequenceDisplay();
       renderPatterns(patterns);
     });
@@ -237,13 +262,16 @@ function renderPatterns(patterns) {
     item.className = 'pattern-item';
     
     const seqHtml = pattern.sequence.map(c => c === 'G' ? '🟢' : '🔴').join(' ');
+    const actionBadge = pattern.action === 'DOWN' 
+        ? `<span style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">⬇️ DOWN</span>`
+        : `<span style="background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">⬆️ UP</span>`;
 
     item.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
         <div style="display:flex; align-items:center; gap:8px;">
           <label class="toggle-label" style="margin:0;">
             <input type="checkbox" class="pattern-toggle" data-index="${index}" ${pattern.active ? 'checked' : ''}>
-            <span class="toggle-text" style="font-weight:600; color:var(--text); opacity: ${pattern.active ? '1' : '0.6'};">${pattern.name}</span>
+            <span class="toggle-text" style="font-weight:600; color:var(--text); opacity: ${pattern.active ? '1' : '0.6'};">${pattern.name} ${actionBadge}</span>
           </label>
         </div>
         <div style="display:flex; gap: 8px;">
@@ -275,6 +303,7 @@ function renderPatterns(patterns) {
       const p = patterns[idx];
       patternNameInput.value = p.name;
       currentSequence = [...p.sequence];
+      updateDirUI(p.action || 'UP'); // Fallback to UP for older saved patterns
       updateSequenceDisplay();
       
       editingPatternIndex = idx;

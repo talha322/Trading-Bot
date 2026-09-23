@@ -1,3 +1,8 @@
+// Initialize Side Panel to open on extension icon click
+chrome.action.onClicked.addListener((tab) => {
+    chrome.sidePanel.open({ windowId: tab.windowId });
+});
+
 async function setupOffscreenDocument(path) {
     if (await chrome.offscreen.hasDocument()) return;
     await chrome.offscreen.createDocument({
