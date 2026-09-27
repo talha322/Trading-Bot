@@ -12,10 +12,43 @@ async function setupOffscreenDocument(path) {
     });
 }
 
+function addAppLog(message, type = 'normal') {
+  chrome.storage.local.get(['appLogs'], (res) => {
+    let logs = res.appLogs || [];
+    const timeString = new Date().toLocaleTimeString([], { hour12: false });
+    logs.unshift({ time: timeString, message, type });
+    if (logs.length > 50) logs.pop();
+    chrome.storage.local.set({ appLogs: logs });
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === 'playPing' && !msg.offscreen) {
         setupOffscreenDocument('offscreen.html').then(() => {
             chrome.runtime.sendMessage({ action: 'playPing', offscreen: true }).catch(() => {});
+        });
+    }
+
+    if (msg.action === 'saveCandle' && msg.candle) {
+        fetch('http://localhost:8000/api/v1/candles', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(msg.candle)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'saved') {
+                console.log(`📡 Candle saved to DB [ID: ${data.id}]`);
+                addAppLog(`📡 Saved to DB: ${msg.candle.asset} (${msg.candle.color === 'G' ? '🟢' : '🔴'})`);
+            } else if (data.status === 'skipped') {
+                console.log(`📡 Candle skipped (duplicate): ${msg.candle.candle_time}`);
+            }
+        })
+        .catch(err => {
+            console.warn('📡 Backend save error:', err);
         });
     }
 });

@@ -57,7 +57,18 @@ window.addEventListener('message', function(event) {
         const prices = grouped[t];
         const open = prices[0];
         const close = prices[prices.length - 1];
-        candles.push(close >= open ? 'G' : 'R');
+        const color = close >= open ? 'G' : 'R';
+        candles.push(color);
+
+        // 📡 Save history candle to DB
+        sendCandleToBackend({
+          asset:       currentAsset,
+          color:       color,
+          open_price:  open,
+          close_price: close,
+          candle_time: parseInt(t),
+          period:      currentPeriod,
+        });
       });
       
       const historyEmojis = candles.map(c => c === 'G' ? '🟢' : '🔴').join('');
@@ -85,11 +96,23 @@ window.addEventListener('message', function(event) {
             const lastCandle = ticks[ticks.length - 1];
             const open = lastCandle.prices[0];
             const close = lastCandle.prices[lastCandle.prices.length - 1];
-            candles.push(close >= open ? 'G' : 'R');
+            const color = close >= open ? 'G' : 'R';
+            candles.push(color);
             
             if (candles.length > 50) candles.shift();
             
-            addAppLog(`Candle Closed: ${close >= open ? '🟢 Green' : '🔴 Red'} (Open: ${open}, Close: ${close})`, 'normal');
+            addAppLog(`Candle Closed: ${color === 'G' ? '🟢 Green' : '🔴 Red'} (Open: ${open}, Close: ${close})`, 'normal');
+            
+            // 📡 Backend ko data bhejo (Data Collection)
+            sendCandleToBackend({
+              asset:       currentAsset,
+              color:       color,
+              open_price:  open,
+              close_price: close,
+              candle_time: lastCandle.time,
+              period:      currentPeriod,
+            });
+
             checkPatterns(candles, currentAsset);
             
             ticks = [];
@@ -212,4 +235,20 @@ function sendTelegramAlert(patternName, asset, colorsMatched, token, chatId, ena
     .then(res => res.json())
     .then(data => console.log("Quotex Bot: Telegram Alert Sent!", data))
     .catch(err => console.error("Quotex Bot: Failed to send alert.", err));
+}
+
+// 📡 Candle data backend ko bhejo (via background script to avoid HTTPS mixed content blocks)
+function sendCandleToBackend(candleData) {
+  chrome.storage.local.get(['dataCollectionEnabled'], (res) => {
+    if (!res.dataCollectionEnabled) return;
+
+    try {
+      chrome.runtime.sendMessage({
+        action: 'saveCandle',
+        candle: candleData
+      }).catch(() => {});
+    } catch (e) {
+      console.warn('📡 Could not dispatch candle to background:', e);
+    }
+  });
 }

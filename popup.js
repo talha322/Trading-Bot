@@ -15,6 +15,7 @@ tabs.forEach(tab => {
 const toggleBtn = document.getElementById('toggle-btn');
 const enableTelegramCheck = document.getElementById('enableTelegram');
 const enableAutoTradeCheck = document.getElementById('enableAutoTrade');
+const enableDataCollectionCheck = document.getElementById('enableDataCollection');
 const telegramInputs = document.getElementById('telegramInputs');
 const botTokenInput = document.getElementById('botToken');
 const chatIdInput = document.getElementById('chatId');
@@ -80,6 +81,13 @@ enableAutoTradeCheck.addEventListener('change', (e) => {
   });
 });
 
+// Auto-save Data Collection toggle immediately
+enableDataCollectionCheck.addEventListener('change', (e) => {
+  chrome.storage.local.set({ dataCollectionEnabled: e.target.checked }, () => {
+    addLog(`Data Collection is now ${e.target.checked ? 'ON ✅ Candles will be saved.' : 'OFF'}`);
+  });
+});
+
 // Logging function
 function addLog(message, type = 'normal') {
   chrome.storage.local.get(['appLogs'], (res) => {
@@ -125,7 +133,7 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 
 // Load Initial Data
-chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram', 'autoTradeEnabled', 'savedPatterns', 'botRunning'], (result) => {
+chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram', 'autoTradeEnabled', 'dataCollectionEnabled', 'savedPatterns', 'botRunning'], (result) => {
   if (result.telegramBotToken) botTokenInput.value = result.telegramBotToken;
   if (result.telegramChatId) chatIdInput.value = result.telegramChatId;
   if (result.enableTelegram) {
@@ -135,6 +143,9 @@ chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram'
   }
   if (result.autoTradeEnabled) {
      enableAutoTradeCheck.checked = true;
+  }
+  if (result.dataCollectionEnabled) {
+     enableDataCollectionCheck.checked = true;
   }
   
   isRunning = result.botRunning || false;
