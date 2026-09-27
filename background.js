@@ -45,6 +45,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 if (data.status === 'saved') {
                     console.log(`📡 Candle saved to DB [ID: ${data.id}]`);
                     addAppLog(`📡 Saved to DB: ${msg.candle.asset} (${msg.candle.color === 'G' ? '🟢' : '🔴'})`);
+
+                    // ⚡ Realtime Event: Notify open dashboard tab to update immediately!
+                    try {
+                        chrome.tabs.query({}, (tabs) => {
+                            tabs.forEach(tab => {
+                                if (tab.url && (tab.url.startsWith(baseUrl) || tab.url.includes('localhost:8000') || tab.url.includes('127.0.0.1:8000'))) {
+                                    chrome.scripting.executeScript({
+                                        target: { tabId: tab.id },
+                                        func: () => {
+                                            window.dispatchEvent(new CustomEvent('candle-saved-event'));
+                                        }
+                                    }).catch(() => {});
+                                }
+                            });
+                        });
+                    } catch (e) {}
                 } else if (data.status === 'skipped') {
                     console.log(`📡 Candle skipped (duplicate): ${msg.candle.candle_time}`);
                 }

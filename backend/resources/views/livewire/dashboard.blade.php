@@ -1,4 +1,4 @@
-<div wire:poll.1s>
+<div>
 
     {{-- ── Stat Cards ── --}}
     <div class="stat-grid">
@@ -18,7 +18,7 @@
             <div class="label">Status</div>
             <div class="value" style="font-size:15px; padding-top:6px; display:flex; align-items:center; gap:6px;">
                 @if($totalCandles > 0)
-                    <span style="color:#3fb950;">● Live Sync (1s)</span>
+                    <span style="color:#3fb950;">● Connected</span>
                 @else
                     <span style="color:#8b949e;">● Waiting for data...</span>
                 @endif
@@ -222,5 +222,31 @@
         </div>
 
     @endif
+
+    <script>
+        // ⚡ Extension jab candle save kare to dashboard ko usi waqt update karo
+        window.addEventListener('candle-saved-event', () => {
+            console.log('⚡ Realtime event received: candle saved! Refreshing dashboard...');
+            if (typeof @this !== 'undefined') {
+                @this.call('$refresh');
+            }
+        });
+
+        // 🕒 Har minute ke rollover (:02s) par sync (sirf 1 dafa per minute)
+        (function scheduleMinuteSync() {
+            const now = new Date();
+            const delay = ((60 - now.getSeconds() + 2) % 60) * 1000;
+            setTimeout(() => {
+                if (typeof @this !== 'undefined') {
+                    @this.call('$refresh');
+                }
+                setInterval(() => {
+                    if (typeof @this !== 'undefined') {
+                        @this.call('$refresh');
+                    }
+                }, 60000);
+            }, delay);
+        })();
+    </script>
 
 </div>
