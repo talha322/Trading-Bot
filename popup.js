@@ -16,6 +16,7 @@ const toggleBtn = document.getElementById('toggle-btn');
 const enableTelegramCheck = document.getElementById('enableTelegram');
 const enableAutoTradeCheck = document.getElementById('enableAutoTrade');
 const enableDataCollectionCheck = document.getElementById('enableDataCollection');
+const serverUrlInput = document.getElementById('serverUrl');
 const telegramInputs = document.getElementById('telegramInputs');
 const botTokenInput = document.getElementById('botToken');
 const chatIdInput = document.getElementById('chatId');
@@ -88,6 +89,14 @@ enableDataCollectionCheck.addEventListener('change', (e) => {
   });
 });
 
+// Auto-save Server URL immediately
+serverUrlInput.addEventListener('change', (e) => {
+  const url = (e.target.value.trim() || 'http://localhost:8000').replace(/\/+$/, '');
+  chrome.storage.local.set({ backendServerUrl: url }, () => {
+    addLog(`Server URL updated: ${url}`);
+  });
+});
+
 // Logging function
 function addLog(message, type = 'normal') {
   chrome.storage.local.get(['appLogs'], (res) => {
@@ -133,7 +142,7 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 
 // Load Initial Data
-chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram', 'autoTradeEnabled', 'dataCollectionEnabled', 'savedPatterns', 'botRunning'], (result) => {
+chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram', 'autoTradeEnabled', 'dataCollectionEnabled', 'backendServerUrl', 'savedPatterns', 'botRunning'], (result) => {
   if (result.telegramBotToken) botTokenInput.value = result.telegramBotToken;
   if (result.telegramChatId) chatIdInput.value = result.telegramChatId;
   if (result.enableTelegram) {
@@ -147,6 +156,7 @@ chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram'
   if (result.dataCollectionEnabled) {
      enableDataCollectionCheck.checked = true;
   }
+  serverUrlInput.value = result.backendServerUrl || 'http://localhost:8000';
   
   isRunning = result.botRunning || false;
   updateUIState();
@@ -190,16 +200,18 @@ function updateUIState() {
 }
 
 saveSettingsBtn.addEventListener('click', () => {
+  const serverUrl = (serverUrlInput.value.trim() || 'http://localhost:8000').replace(/\/+$/, '');
   chrome.storage.local.set({
     enableTelegram: enableTelegramCheck.checked,
     autoTradeEnabled: enableAutoTradeCheck.checked,
+    backendServerUrl: serverUrl,
     telegramBotToken: botTokenInput.value.trim(),
     telegramChatId: chatIdInput.value.trim()
   }, () => {
     const orig = saveSettingsBtn.innerText;
     saveSettingsBtn.innerText = "Updated! ✅";
     setTimeout(() => saveSettingsBtn.innerText = orig, 2000);
-    addLog(`Settings updated. Auto-Trade: ${enableAutoTradeCheck.checked ? 'ON' : 'OFF'}`);
+    addLog(`Settings updated. Server: ${serverUrl}`);
   });
 });
 

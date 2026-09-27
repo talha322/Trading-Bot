@@ -16,7 +16,9 @@
     "*://*.market-qx.trade/*",
     "https://api.telegram.org/*",
     "http://localhost:8000/*",
-    "http://127.0.0.1:8000/*"
+    "http://127.0.0.1:8000/*",
+    "https://*/*",
+    "http://*/*"
   ],
   "background": {
     "service_worker": "background.js"

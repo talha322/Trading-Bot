@@ -30,25 +30,28 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     if (msg.action === 'saveCandle' && msg.candle) {
-        fetch('http://localhost:8000/api/v1/candles', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(msg.candle)
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === 'saved') {
-                console.log(`📡 Candle saved to DB [ID: ${data.id}]`);
-                addAppLog(`📡 Saved to DB: ${msg.candle.asset} (${msg.candle.color === 'G' ? '🟢' : '🔴'})`);
-            } else if (data.status === 'skipped') {
-                console.log(`📡 Candle skipped (duplicate): ${msg.candle.candle_time}`);
-            }
-        })
-        .catch(err => {
-            console.warn('📡 Backend save error:', err);
+        chrome.storage.local.get(['backendServerUrl'], (res) => {
+            const baseUrl = (res.backendServerUrl || 'http://localhost:8000').replace(/\/+$/, '');
+            fetch(`${baseUrl}/api/v1/candles`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(msg.candle)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'saved') {
+                    console.log(`📡 Candle saved to DB [ID: ${data.id}]`);
+                    addAppLog(`📡 Saved to DB: ${msg.candle.asset} (${msg.candle.color === 'G' ? '🟢' : '🔴'})`);
+                } else if (data.status === 'skipped') {
+                    console.log(`📡 Candle skipped (duplicate): ${msg.candle.candle_time}`);
+                }
+            })
+            .catch(err => {
+                console.warn('📡 Backend save error:', err);
+            });
         });
     }
 });

@@ -95,15 +95,16 @@
         <div class="divider" style="margin: 15px 0;"></div>
 
         <div class="section-label">📡 Data Collection</div>
-        <div class="toggle-row" style="margin-bottom: 5px; margin-top: 5px;">
+        <div class="toggle-row" style="margin-bottom: 8px; margin-top: 5px;">
             <label class="toggle-label" for="enableDataCollection">
                 <input type="checkbox" id="enableDataCollection">
                 <span class="toggle-text">Save Candles to Backend</span>
             </label>
         </div>
-        <p style="color:var(--text3); font-size:11px; margin: 4px 0 15px 0;">
-            ⚠️ Backend server locally chalna chahiye (localhost:8000)
-        </p>
+        <div class="input-group" style="margin-bottom: 15px;">
+            <label for="serverUrl">Backend Server URL <span class="hint">(Local ya Hosted)</span></label>
+            <input type="text" id="serverUrl" placeholder="http://localhost:8000">
+        </div>
 
         <div class="divider" style="margin: 15px 0;"></div>
 
