@@ -5,12 +5,133 @@
 let lastSentAlertTime = 0;
 
 let currentAsset = "";
+let requestedAsset = "";
 let currentPeriod = 60;
 let ticks = [];
 let candles = []; // Array of 'G' or 'R'
+let historicalCandlesMap = new Map();
+
+function getActiveAssetFromDOM() {
+  try {
+    const activeEl = document.querySelector('.tab__item--active, .tabs__item--active, .instruments-tabs__item--active, [class*="tab"][class*="active"], [class*="item--active"]');
+    if (!activeEl) return null;
+    const txt = (activeEl.innerText || "").trim();
+    const m = txt.match(/([A-Z]{3})\s*[\/]?\s*([A-Z]{3})/i);
+    if (m) {
+      let sym = (m[1] + m[2]).toUpperCase();
+      if (txt.toUpperCase().includes('OTC')) {
+        sym += '_otc';
+      }
+      return sym;
+    }
+  } catch(e) {}
+  return null;
+}
+
+function switchActiveAsset(newAsset) {
+  if (!newAsset || newAsset === currentAsset) return;
+  currentAsset = newAsset;
+  chrome.storage.local.set({ currentActiveAsset: currentAsset });
+  addAppLog(`Active Chart: ${currentAsset}`, 'normal');
+  historicalCandlesMap.clear();
+  ticks = [];
+  candles = [];
+}
+
+// Detect when user clicks on an asset tab on Quotex screen
+document.addEventListener('click', () => {
+  setTimeout(() => {
+    const domAsset = getActiveAssetFromDOM();
+    if (domAsset && domAsset !== currentAsset) {
+      switchActiveAsset(domAsset);
+    }
+  }, 150);
+});
+
+// Periodic check (every 1.5s) to guarantee alignment with visible screen
+setInterval(() => {
+  const domAsset = getActiveAssetFromDOM();
+  if (domAsset && domAsset !== currentAsset) {
+    switchActiveAsset(domAsset);
+  }
+}, 1500);
 
 window.addEventListener('message', function(event) {
-  if (event.source !== window || !event.data || event.data.type !== 'QUOTEX_WS_MSG') return;
+  if (event.source !== window || !event.data) return;
+
+  // Handle Historical Chunk from history/load
+  if (event.data.type === 'QUOTEX_HISTORY_CHUNK') {
+    let payload = event.data.data;
+    if (payload) {
+      try {
+        let fb = payload.indexOf('{');
+        if (fb !== -1) {
+          let d = JSON.parse(payload.substring(fb));
+          if (d.data && Array.isArray(d.data)) {
+            d.data.forEach(c => historicalCandlesMap.set(c.time, c));
+            const progressData = {
+              count: historicalCandlesMap.size,
+              asset: requestedAsset || currentAsset || d.asset,
+              timestamp: Date.now()
+            };
+            chrome.storage.local.set({ historyFetchProgress: progressData });
+            chrome.runtime.sendMessage({ action: 'historyProgress', ...progressData }, () => {
+              if (chrome.runtime.lastError) {}
+            });
+          }
+        }
+      } catch(e) {}
+    }
+    return;
+  }
+
+  // Handle Chunk Progress events (for live progress bar)
+  if (event.data.type === 'QUOTEX_FETCH_CHUNK_PROGRESS') {
+    const chunkProg = {
+      action: 'historyChunkProgress',
+      chunk: event.data.chunk,
+      total: event.data.total,
+      percent: event.data.percent,
+      count: historicalCandlesMap.size,
+      asset: requestedAsset || currentAsset,
+      timestamp: Date.now()
+    };
+    chrome.storage.local.set({ historyChunkProgress: chunkProg });
+    chrome.runtime.sendMessage(chunkProg, () => {
+      if (chrome.runtime.lastError) {}
+    });
+    return;
+  }
+
+  // Handle History Status events
+  if (event.data.type === 'QUOTEX_FETCH_HISTORY_STATUS') {
+    if (event.data.status === 'completed') {
+      const candlesList = Array.from(historicalCandlesMap.values()).sort((a,b) => a.time - b.time);
+      const resultData = {
+        status: 'completed',
+        candles: candlesList,
+        asset: requestedAsset || currentAsset,
+        timestamp: Date.now()
+      };
+      chrome.storage.local.set({ historyFetchResult: resultData });
+      chrome.runtime.sendMessage({ action: 'historyCompleted', ...resultData }, () => {
+        if (chrome.runtime.lastError) {}
+      });
+    } else if (event.data.status === 'error') {
+      const errorData = {
+        status: 'error',
+        message: event.data.message,
+        timestamp: Date.now()
+      };
+      chrome.storage.local.set({ historyFetchResult: errorData });
+      chrome.runtime.sendMessage({ action: 'historyError', ...errorData }, () => {
+        if (chrome.runtime.lastError) {}
+      });
+    }
+    return;
+  }
+
+  if (event.data.type !== 'QUOTEX_WS_MSG') return;
 
   let payload = event.data.data;
   if (!payload || typeof payload !== 'string') return;
@@ -33,7 +154,7 @@ window.addEventListener('message', function(event) {
 
     // --- 1. HISTORY DATA ---
     if (data.history && data.asset) {
-      currentAsset = data.asset;
+      switchActiveAsset(data.asset);
       currentPeriod = data.period || 60;
       
       let grouped = {};
@@ -57,17 +178,20 @@ window.addEventListener('message', function(event) {
         const prices = grouped[t];
         const open = prices[0];
         const close = prices[prices.length - 1];
+        const high = Math.max(...prices);
+        const low = Math.min(...prices);
         const color = close >= open ? 'G' : 'R';
         candles.push(color);
 
-        // 📡 Save history candle to DB
-        sendCandleToBackend({
-          asset:       currentAsset,
-          color:       color,
-          open_price:  open,
-          close_price: close,
-          candle_time: parseInt(t),
-          period:      currentPeriod,
+        // Also add to historical candles map
+        historicalCandlesMap.set(parseInt(t), {
+          symbol_id: 0,
+          time: parseInt(t),
+          open: open,
+          close: close,
+          high: high,
+          low: low,
+          ticks: prices.length
         });
       });
       
@@ -83,10 +207,19 @@ window.addEventListener('message', function(event) {
       const timestamp = tick[1];
       const price = tick[2];
       
-      // Only process if it matches the current asset (or if we haven't set one yet)
-      if (asset && timestamp && price && (currentAsset === "" || asset === currentAsset)) {
-        if (currentAsset === "") currentAsset = asset;
+      // If no active asset is set yet, initialize it
+      if (!currentAsset) {
+        const domAsset = getActiveAssetFromDOM();
+        switchActiveAsset(domAsset || asset);
+      }
 
+      // STRICT FILTER: Only process ticks for the currently visible active chart!
+      // Ignore background ticks from other tabs open in Quotex tab bar!
+      if (asset !== currentAsset) {
+        return;
+      }
+
+      if (asset && timestamp && price) {
         const time = Math.floor(timestamp / currentPeriod) * currentPeriod;
         
         let lastTickObj = ticks.find(t => t.time === time);
@@ -96,23 +229,26 @@ window.addEventListener('message', function(event) {
             const lastCandle = ticks[ticks.length - 1];
             const open = lastCandle.prices[0];
             const close = lastCandle.prices[lastCandle.prices.length - 1];
+            const high = Math.max(...lastCandle.prices);
+            const low = Math.min(...lastCandle.prices);
             const color = close >= open ? 'G' : 'R';
             candles.push(color);
             
+            // Add closed candle to historical map
+            historicalCandlesMap.set(lastCandle.time, {
+              symbol_id: 0,
+              time: lastCandle.time,
+              open: open,
+              close: close,
+              high: high,
+              low: low,
+              ticks: lastCandle.prices.length
+            });
+
             if (candles.length > 50) candles.shift();
             
             addAppLog(`Candle Closed: ${color === 'G' ? '🟢 Green' : '🔴 Red'} (Open: ${open}, Close: ${close})`, 'normal');
             
-            // 📡 Backend ko data bhejo (Data Collection)
-            sendCandleToBackend({
-              asset:       currentAsset,
-              color:       color,
-              open_price:  open,
-              close_price: close,
-              candle_time: lastCandle.time,
-              period:      currentPeriod,
-            });
-
             checkPatterns(candles, currentAsset);
             
             ticks = [];
@@ -206,7 +342,9 @@ function executeTrade(action) {
 
 function playPing() {
   try {
-    chrome.runtime.sendMessage({ action: 'playPing' }).catch(() => {});
+    chrome.runtime.sendMessage({ action: 'playPing' }, () => {
+      if (chrome.runtime.lastError) {}
+    });
   } catch (e) {
     console.log("Failed to send ping message to background");
   }
@@ -237,18 +375,59 @@ function sendTelegramAlert(patternName, asset, colorsMatched, token, chatId, ena
     .catch(err => console.error("Quotex Bot: Failed to send alert.", err));
 }
 
-// 📡 Candle data backend ko bhejo (via background script to avoid HTTPS mixed content blocks)
-function sendCandleToBackend(candleData) {
-  chrome.storage.local.get(['dataCollectionEnabled'], (res) => {
-    if (!res.dataCollectionEnabled) return;
+// 📨 Listen for commands from Popup via storage AND runtime messages
+let lastFetchTriggerTime = 0;
+function triggerHistoryFetch(assetToFetch, hours, period) {
+  const now = Date.now();
+  if (now - lastFetchTriggerTime < 1200) {
+    return; // Prevent duplicate concurrent requests
+  }
+  lastFetchTriggerTime = now;
 
-    try {
-      chrome.runtime.sendMessage({
-        action: 'saveCandle',
-        candle: candleData
-      }).catch(() => {});
-    } catch (e) {
-      console.warn('📡 Could not dispatch candle to background:', e);
-    }
-  });
+  const targetAsset = assetToFetch || currentAsset || 'USDARS_otc';
+  // If user requested a different asset than currently loaded, clear map
+  if (requestedAsset && requestedAsset !== targetAsset) {
+    historicalCandlesMap.clear();
+  }
+  requestedAsset = targetAsset;
+
+  // Determine earliest known timestamp in our candle collection
+  let earliestTime = null;
+  if (historicalCandlesMap.size > 0) {
+    earliestTime = Math.min(...Array.from(historicalCandlesMap.keys()));
+  }
+
+  console.log(`📡 Quotex Content.js: Triggering fetch for ${requestedAsset}, earliest known candle: ${earliestTime}, count so far: ${historicalCandlesMap.size}`);
+
+  window.postMessage({
+    type: 'QUOTEX_FETCH_HISTORY_REQUEST',
+    asset: requestedAsset,
+    startTime: earliestTime,
+    hours: hours || 6,
+    period: period || currentPeriod || 60
+  }, '*');
 }
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.historyFetchTrigger && changes.historyFetchTrigger.newValue) {
+    const req = changes.historyFetchTrigger.newValue;
+    triggerHistoryFetch(req.asset, req.hours, req.period);
+  }
+  if (area === 'local' && changes.historyAbortTrigger && changes.historyAbortTrigger.newValue) {
+    window.postMessage({ type: 'QUOTEX_ABORT_HISTORY_REQUEST' }, '*');
+  }
+});
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.action === 'startHistoryFetch') {
+    triggerHistoryFetch(msg.asset, msg.hours, msg.period);
+    sendResponse({ status: 'initiated', asset: msg.asset || currentAsset });
+  } else if (msg.action === 'abortHistoryFetch') {
+    window.postMessage({ type: 'QUOTEX_ABORT_HISTORY_REQUEST' }, '*');
+    sendResponse({ status: 'aborted' });
+  } else if (msg.action === 'getCurrentAsset') {
+    sendResponse({ asset: currentAsset, period: currentPeriod });
+  }
+  return true;
+});
+

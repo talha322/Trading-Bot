@@ -5,6 +5,7 @@
   "description": "Monitors Quotex charts and sends Telegram alerts based on custom candle patterns.",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "scripting",
     "tabs",
     "offscreen",

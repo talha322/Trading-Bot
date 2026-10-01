@@ -15,8 +15,6 @@ tabs.forEach(tab => {
 const toggleBtn = document.getElementById('toggle-btn');
 const enableTelegramCheck = document.getElementById('enableTelegram');
 const enableAutoTradeCheck = document.getElementById('enableAutoTrade');
-const enableDataCollectionCheck = document.getElementById('enableDataCollection');
-const serverUrlInput = document.getElementById('serverUrl');
 const telegramInputs = document.getElementById('telegramInputs');
 const botTokenInput = document.getElementById('botToken');
 const chatIdInput = document.getElementById('chatId');
@@ -82,21 +80,6 @@ enableAutoTradeCheck.addEventListener('change', (e) => {
   });
 });
 
-// Auto-save Data Collection toggle immediately
-enableDataCollectionCheck.addEventListener('change', (e) => {
-  chrome.storage.local.set({ dataCollectionEnabled: e.target.checked }, () => {
-    addLog(`Data Collection is now ${e.target.checked ? 'ON ✅ Candles will be saved.' : 'OFF'}`);
-  });
-});
-
-// Auto-save Server URL immediately
-serverUrlInput.addEventListener('change', (e) => {
-  const url = (e.target.value.trim() || 'http://localhost:8000').replace(/\/+$/, '');
-  chrome.storage.local.set({ backendServerUrl: url }, () => {
-    addLog(`Server URL updated: ${url}`);
-  });
-});
-
 // Logging function
 function addLog(message, type = 'normal') {
   chrome.storage.local.get(['appLogs'], (res) => {
@@ -142,7 +125,7 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 
 // Load Initial Data
-chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram', 'autoTradeEnabled', 'dataCollectionEnabled', 'backendServerUrl', 'savedPatterns', 'botRunning'], (result) => {
+chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram', 'autoTradeEnabled', 'savedPatterns', 'botRunning'], (result) => {
   if (result.telegramBotToken) botTokenInput.value = result.telegramBotToken;
   if (result.telegramChatId) chatIdInput.value = result.telegramChatId;
   if (result.enableTelegram) {
@@ -153,10 +136,6 @@ chrome.storage.local.get(['telegramBotToken', 'telegramChatId', 'enableTelegram'
   if (result.autoTradeEnabled) {
      enableAutoTradeCheck.checked = true;
   }
-  if (result.dataCollectionEnabled) {
-     enableDataCollectionCheck.checked = true;
-  }
-  serverUrlInput.value = result.backendServerUrl || 'http://localhost:8000';
   
   isRunning = result.botRunning || false;
   updateUIState();
@@ -176,15 +155,9 @@ toggleBtn.addEventListener('click', () => {
   chrome.storage.local.set({ botRunning: isRunning }, () => {
     updateUIState();
     if (isRunning) {
-      addLog("Starting Bot... Opening Quotex tab", "match");
-      chrome.tabs.create({ url: "https://market-qx.trade/en/demo-trade", active: true });
-      addLog("Quotex Tab Opened. Waiting for candles...", "normal");
+      addLog("Bot Started. Radar Active & Monitoring Patterns...", "match");
     } else {
-      chrome.tabs.query({ url: "*://*.market-qx.trade/*" }, function(tabs) {
-        tabs.forEach(tab => chrome.tabs.remove(tab.id));
-        addLog("Quotex Tab Closed.", "warn");
-      });
-      addLog("Radar Stopped.", "warn");
+      addLog("Bot Stopped. Radar Inactive.", "warn");
     }
   });
 });
@@ -200,18 +173,16 @@ function updateUIState() {
 }
 
 saveSettingsBtn.addEventListener('click', () => {
-  const serverUrl = (serverUrlInput.value.trim() || 'http://localhost:8000').replace(/\/+$/, '');
   chrome.storage.local.set({
     enableTelegram: enableTelegramCheck.checked,
     autoTradeEnabled: enableAutoTradeCheck.checked,
-    backendServerUrl: serverUrl,
     telegramBotToken: botTokenInput.value.trim(),
     telegramChatId: chatIdInput.value.trim()
   }, () => {
     const orig = saveSettingsBtn.innerText;
     saveSettingsBtn.innerText = "Updated! ✅";
     setTimeout(() => saveSettingsBtn.innerText = orig, 2000);
-    addLog(`Settings updated. Server: ${serverUrl}`);
+    addLog(`Settings updated successfully.`);
   });
 });
 
@@ -374,3 +345,281 @@ function renderPatterns(patterns) {
     });
   });
 }
+
+// ─── Historical Candles Export Feature ─────────────────────────────────────────
+const startHistoryBtn = document.getElementById('startHistoryBtn');
+const historyAssetInput = document.getElementById('historyAsset');
+const historyHoursSelect = document.getElementById('historyHours');
+const customDaysGroup = document.getElementById('customDaysGroup');
+const customDaysInput = document.getElementById('customDaysInput');
+const historyPeriodSelect = document.getElementById('historyPeriod');
+const historyProgressBox = document.getElementById('historyProgressBox');
+const historyProgressBar = document.getElementById('historyProgressBar');
+const historyStatusTitle = document.getElementById('historyStatusTitle');
+const historyStatusMsg = document.getElementById('historyStatusMsg');
+const historyCountBadge = document.getElementById('historyCountBadge');
+const stopHistoryBtn = document.getElementById('stopHistoryBtn');
+
+if (historyHoursSelect) {
+  historyHoursSelect.addEventListener('change', () => {
+    if (customDaysGroup) {
+      customDaysGroup.style.display = historyHoursSelect.value === 'custom' ? 'block' : 'none';
+    }
+  });
+}
+
+// Auto-fill active asset from storage
+chrome.storage.local.get(['currentActiveAsset'], (res) => {
+  if (res && res.currentActiveAsset && historyAssetInput) {
+    historyAssetInput.value = res.currentActiveAsset;
+  }
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.currentActiveAsset && changes.currentActiveAsset.newValue && historyAssetInput) {
+    historyAssetInput.value = changes.currentActiveAsset.newValue;
+    historyAssetInput.style.borderColor = '#10b981';
+    setTimeout(() => { if (historyAssetInput) historyAssetInput.style.borderColor = 'var(--border)'; }, 800);
+  }
+});
+
+// Also try to query active tab for immediate response
+try {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs && tabs.length > 0 && tabs[0].id) {
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'getCurrentAsset' }, (resp) => {
+        if (chrome.runtime.lastError) return;
+        if (resp && resp.asset && historyAssetInput) {
+          historyAssetInput.value = resp.asset;
+        }
+      });
+    }
+  });
+} catch(e) {}
+
+if (stopHistoryBtn) {
+  stopHistoryBtn.addEventListener('click', () => {
+    stopHistoryBtn.innerText = '⏳ Finalizing download...';
+    stopHistoryBtn.disabled = true;
+    chrome.storage.local.set({ historyAbortTrigger: { timestamp: Date.now() } });
+    chrome.tabs.query({}, (tabs) => {
+      const targetTabs = tabs.filter(t => t.url && (t.url.includes('quotex') || t.url.includes('qxbroker') || t.url.includes('market-qx')));
+      targetTabs.forEach(t => chrome.tabs.sendMessage(t.id, { action: 'abortHistoryFetch' }, () => {
+        if (chrome.runtime.lastError) {}
+      }));
+    });
+  });
+}
+
+if (startHistoryBtn) {
+  startHistoryBtn.addEventListener('click', () => {
+    const rawAsset = (historyAssetInput && historyAssetInput.value.trim()) || 'USDARS_otc';
+    
+    let hours = 24;
+    if (historyHoursSelect && historyHoursSelect.value === 'custom') {
+      const days = Math.max(1, parseInt(customDaysInput ? customDaysInput.value : 7) || 7);
+      hours = days * 24;
+    } else if (historyHoursSelect) {
+      hours = parseInt(historyHoursSelect.value || 24);
+    }
+    const period = parseInt(historyPeriodSelect ? historyPeriodSelect.value : 60) || 60;
+    const timeLabel = hours >= 24 ? `${(hours / 24).toFixed(0)} Days (${hours} Hours)` : `${hours} Hours`;
+
+    historyProgressBox.style.display = 'block';
+    if (historyProgressBar) historyProgressBar.style.width = '2%';
+    if (stopHistoryBtn) {
+      stopHistoryBtn.style.display = 'block';
+      stopHistoryBtn.disabled = false;
+      stopHistoryBtn.innerText = '⏹ Stop & Download What\'s Fetched';
+    }
+
+    historyStatusTitle.innerText = `Fetching ${rawAsset}...`;
+    historyStatusMsg.innerText = `Initiating download for past ${timeLabel}...`;
+    historyCountBadge.innerText = '0 Candles';
+    startHistoryBtn.disabled = true;
+    startHistoryBtn.innerText = '⏳ Fetching in progress...';
+
+    // 1. Trigger via chrome.storage.local (100% reliable across all contexts)
+    chrome.storage.local.set({
+      historyFetchTrigger: {
+        asset: rawAsset,
+        hours: hours,
+        period: period,
+        timestamp: Date.now()
+      }
+    });
+
+    // 2. Also send via runtime tab message as fast-path
+    chrome.tabs.query({}, (tabs) => {
+      const targetTabs = tabs.filter(t => t.url && (t.url.includes('quotex') || t.url.includes('qxbroker') || t.url.includes('market-qx')));
+      if (targetTabs.length === 0) {
+        historyStatusTitle.innerText = '❌ Quotex Tab Not Found';
+        historyStatusMsg.innerText = 'Pehle browser me Quotex open karein.';
+        startHistoryBtn.disabled = false;
+        startHistoryBtn.innerText = '📥 Download History (.json)';
+        if (stopHistoryBtn) stopHistoryBtn.style.display = 'none';
+        return;
+      }
+
+      let tabResponded = false;
+      targetTabs.forEach(t => {
+        chrome.tabs.sendMessage(t.id, {
+          action: 'startHistoryFetch',
+          asset: rawAsset,
+          hours: hours,
+          period: period
+        }, (resp) => {
+          if (chrome.runtime.lastError) {
+            // Disconnected or inactive tab
+          } else if (resp && resp.status === 'initiated') {
+            tabResponded = true;
+          }
+        });
+      });
+
+      // Verification: If after 1.5s tab hasn't acknowledged and no chunk arrived, notify user to refresh Quotex
+      setTimeout(() => {
+        if (!tabResponded && startHistoryBtn && startHistoryBtn.disabled) {
+          chrome.storage.local.get(['historyChunkProgress'], (res) => {
+            const lastTime = res.historyChunkProgress ? res.historyChunkProgress.timestamp || 0 : 0;
+            if (Date.now() - lastTime > 2500) {
+              historyStatusTitle.innerText = '⚠️ Quotex Tab Reload Karein';
+              historyStatusMsg.innerText = 'Extension update hui hai. Quotex tab par ja kar page ko Reload (F5) karein, phir dobara click karein.';
+              startHistoryBtn.disabled = false;
+              startHistoryBtn.innerText = '📥 Download History (.json)';
+              if (stopHistoryBtn) stopHistoryBtn.style.display = 'none';
+            }
+          });
+        }
+      }, 1500);
+    });
+  });
+}
+
+// Handle completion and progress via storage listener
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local') {
+    if (changes.historyChunkProgress && changes.historyChunkProgress.newValue) {
+      const cp = changes.historyChunkProgress.newValue;
+      if (historyProgressBar) historyProgressBar.style.width = `${cp.percent}%`;
+      if (historyStatusMsg) historyStatusMsg.innerText = `Chunk ${cp.chunk} of ${cp.total} (${cp.percent}%) | ${cp.count} candles...`;
+      if (historyCountBadge) historyCountBadge.innerText = `${cp.count} Candles`;
+    } else if (changes.historyFetchProgress && changes.historyFetchProgress.newValue) {
+      const p = changes.historyFetchProgress.newValue;
+      if (historyCountBadge) historyCountBadge.innerText = `${p.count} Candles`;
+      if (historyStatusMsg) historyStatusMsg.innerText = `Received ${p.count} candles so far...`;
+    }
+    if (changes.historyFetchResult && changes.historyFetchResult.newValue) {
+      handleHistoryResult(changes.historyFetchResult.newValue);
+    }
+  }
+});
+
+// Also handle direct runtime messages
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.action === 'historyChunkProgress') {
+    if (historyProgressBar) historyProgressBar.style.width = `${msg.percent}%`;
+    if (historyStatusMsg) historyStatusMsg.innerText = `Chunk ${msg.chunk} of ${msg.total} (${msg.percent}%) | ${msg.count} candles...`;
+    if (historyCountBadge) historyCountBadge.innerText = `${msg.count} Candles`;
+  } else if (msg.action === 'historyProgress') {
+    if (historyCountBadge) historyCountBadge.innerText = `${msg.count} Candles`;
+    if (historyStatusMsg) historyStatusMsg.innerText = `Received ${msg.count} candles so far...`;
+  }
+  if (msg.action === 'historyCompleted') {
+    handleHistoryResult(msg);
+  }
+  if (msg.action === 'historyError') {
+    handleHistoryResult({ status: 'error', message: msg.message });
+  }
+});
+
+let lastProcessedResultTime = 0;
+
+function handleHistoryResult(data) {
+  const now = Date.now();
+  if (data.timestamp && data.timestamp === lastProcessedResultTime) return;
+  if (now - lastProcessedResultTime < 2500) return;
+  lastProcessedResultTime = data.timestamp || now;
+
+  if (startHistoryBtn) {
+    startHistoryBtn.disabled = false;
+    startHistoryBtn.innerText = '📥 Download History (.json)';
+  }
+  if (stopHistoryBtn) {
+    stopHistoryBtn.style.display = 'none';
+    stopHistoryBtn.innerText = '⏹ Stop & Download What\'s Fetched';
+    stopHistoryBtn.disabled = false;
+  }
+  if (historyProgressBar) {
+    historyProgressBar.style.width = '100%';
+  }
+
+  if (data.status === 'error') {
+    if (historyStatusTitle) historyStatusTitle.innerText = '❌ Failed';
+    if (historyStatusMsg) historyStatusMsg.innerText = data.message || 'Error occurred';
+    return;
+  }
+
+  const candles = data.candles || [];
+  if (candles.length === 0) {
+    if (historyStatusTitle) historyStatusTitle.innerText = '⚠️ No Candles Received';
+    if (historyStatusMsg) historyStatusMsg.innerText = 'Koi candle nahi mili. Chart ko mouse se ek dafa move karke dobara try karein.';
+    return;
+  }
+
+  const assetName = data.asset || (historyAssetInput ? historyAssetInput.value : 'USDARS_otc');
+  if (historyStatusTitle) historyStatusTitle.innerText = '✅ Complete!';
+  if (historyCountBadge) historyCountBadge.innerText = `${candles.length} Candles`;
+  const daysEstimate = (candles.length / 1440).toFixed(1);
+  if (historyStatusMsg) historyStatusMsg.innerText = `Successfully fetched ${candles.length} candles (~${daysEstimate} days). Downloading file...`;
+
+  const period = parseInt(historyPeriodSelect ? historyPeriodSelect.value : 60) || 60;
+  downloadCandlesJson(candles, assetName, period);
+}
+
+function downloadCandlesJson(candles, asset, period) {
+  const p = period || 60;
+  const coverageHours = (candles.length * p / 3600).toFixed(1);
+  const coverageDays = (candles.length * p / 86400).toFixed(1);
+
+  const formattedCandles = candles.map((c, idx) => {
+    const openVal = Number(c.open || 0);
+    const closeVal = Number(c.close || 0);
+    const highVal = Number(c.high || openVal);
+    const lowVal = Number(c.low || closeVal);
+    const color = closeVal >= openVal ? "G" : "R";
+    const dt = new Date(c.time * 1000).toLocaleString('sv-SE');
+
+    return {
+      index: idx + 1,
+      time: c.time,
+      datetime: dt,
+      color: color,
+      open: openVal,
+      close: closeVal,
+      high: highVal,
+      low: lowVal,
+      ticks: c.ticks || 1
+    };
+  });
+
+  const exportObj = {
+    asset: asset,
+    period: p,
+    total_candles: candles.length,
+    coverage_hours: parseFloat(coverageHours),
+    coverage_days: parseFloat(coverageDays),
+    exported_at: new Date().toISOString(),
+    candles: formattedCandles
+  };
+
+  const jsonStr = JSON.stringify(exportObj, null, 2);
+  const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `candles_${asset}_${candles.length}_candles.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+

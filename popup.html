@@ -38,6 +38,7 @@
     <!-- ── Tabs ── -->
     <div class="tab-bar">
         <button class="tab-btn active" data-tab="patterns">🧩 Patterns</button>
+        <button class="tab-btn" data-tab="history">📥 History</button>
         <button class="tab-btn" data-tab="settings">⚙️ Settings</button>
         <button class="tab-btn" data-tab="log">📋 Log</button>
     </div>
@@ -81,6 +82,93 @@
 
     </div>
 
+    <!-- ══════ TAB: History ══════ -->
+    <div class="tab-content" id="tab-history">
+        <div class="section-label">📥 Historical Candles Export</div>
+        
+        <div class="input-group" style="margin-bottom: 12px; margin-top: 5px;">
+            <label for="historyAsset" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Active Chart Pair</span>
+                <span id="assetLiveBadge" style="font-size: 10px; color: #10b981; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                    <span style="display: inline-block; width: 6px; height: 6px; background: #10b981; border-radius: 50%; box-shadow: 0 0 6px #10b981;"></span> LIVE SYNC
+                </span>
+            </label>
+            <div style="position: relative;">
+                <input type="text" id="historyAsset" readonly style="background: var(--bg2); border: 1px solid var(--border); color: #60a5fa; font-weight: 700; font-size: 13px; letter-spacing: 0.5px; cursor: not-allowed; padding-right: 32px;" placeholder="Detecting active chart...">
+                <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--text3);" title="Locked to current screen chart">🔒</span>
+            </div>
+            <span class="hint" id="assetHintText">Quotex chart par jo pair khula hai, ye automatically wahi rahega.</span>
+        </div>
+
+        <div class="input-group" style="margin-bottom: 12px;">
+            <label for="historyHours">Time Range (History Depth)</label>
+            <select id="historyHours" style="background: var(--bg2); border: 1px solid var(--border); color: var(--text); padding: 8px; border-radius: var(--radius-sm); width: 100%;">
+                <optgroup label="⏱️ Hours">
+                    <option value="1">1 Hour (~60 Candles)</option>
+                    <option value="3">3 Hours (~180 Candles)</option>
+                    <option value="6">6 Hours (~360 Candles)</option>
+                    <option value="12">12 Hours (~720 Candles)</option>
+                    <option value="24" selected>1 Day / 24 Hours (~1,440 Candles)</option>
+                </optgroup>
+                <optgroup label="📅 Days & Weeks">
+                    <option value="72">3 Days (~4,320 Candles)</option>
+                    <option value="168">1 Week / 7 Days (~10,080 Candles)</option>
+                    <option value="336">2 Weeks / 14 Days (~20,160 Candles)</option>
+                </optgroup>
+                <optgroup label="🗓️ Months & Years">
+                    <option value="720">1 Month / 30 Days (~43,200 Candles)</option>
+                    <option value="2160">3 Months / 90 Days (~129,600 Candles)</option>
+                    <option value="4320">6 Months / 180 Days (~259,200 Candles)</option>
+                    <option value="8760">1 Year / 365 Days (~525,600 Candles)</option>
+                </optgroup>
+                <optgroup label="⚙️ Custom Range">
+                    <option value="custom">Custom Days (Enter any number)...</option>
+                </optgroup>
+            </select>
+        </div>
+
+        <div class="input-group" id="customDaysGroup" style="display: none; margin-bottom: 12px;">
+            <label for="customDaysInput">Custom Number of Days</label>
+            <input type="number" id="customDaysInput" min="1" max="730" value="7" placeholder="e.g. 15 for 15 days, 45 for 1.5 months, 365 for 1 year">
+            <span class="hint">Kitne din purana data chahiye (1 se 730 din)</span>
+        </div>
+
+        <div class="input-group" style="margin-bottom: 12px;">
+            <label for="historyPeriod">Candle Timeframe</label>
+            <select id="historyPeriod" style="background: var(--bg2); border: 1px solid var(--border); color: var(--text); padding: 8px; border-radius: var(--radius-sm); width: 100%;">
+                <option value="60" selected>1 Minute (60s)</option>
+                <option value="300">5 Minutes (300s)</option>
+                <option value="600">10 Minutes (600s)</option>
+                <option value="900">15 Minutes (900s)</option>
+                <option value="1800">30 Minutes (1800s)</option>
+                <option value="3600">1 Hour (3600s)</option>
+                <option value="86400">1 Day (86400s)</option>
+            </select>
+        </div>
+
+        <button id="startHistoryBtn" class="btn-primary" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; margin-top: 5px;">
+            📥 Download History (.json)
+        </button>
+
+        <div id="historyProgressBox" style="display: none; margin-top: 15px; padding: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <span id="historyStatusTitle" style="font-size: 12px; font-weight: 600; color: #818cf8;">Fetching History...</span>
+                <span id="historyCountBadge" style="font-size: 11px; padding: 2px 6px; background: rgba(99, 102, 241, 0.2); color: #818cf8; border-radius: 4px;">0 Candles</span>
+            </div>
+            
+            <!-- Visual Progress Bar -->
+            <div style="width: 100%; background: rgba(255,255,255,0.08); height: 6px; border-radius: 3px; margin: 8px 0; overflow: hidden;">
+                <div id="historyProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #10b981); transition: width 0.25s ease;"></div>
+            </div>
+
+            <p id="historyStatusMsg" style="font-size: 11px; color: var(--text2); margin: 0;">Please wait, sending requests...</p>
+            
+            <button id="stopHistoryBtn" type="button" style="display: none; margin-top: 10px; width: 100%; padding: 6px 10px; background: #ef4444; color: #fff; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: 600; transition: background 0.2s;">
+                ⏹ Stop & Download What's Fetched
+            </button>
+        </div>
+    </div>
+
     <!-- ══════ TAB: Settings ══════ -->
     <div class="tab-content" id="tab-settings">
         
@@ -90,20 +178,6 @@
                 <input type="checkbox" id="enableAutoTrade">
                 <span class="toggle-text">Enable Auto-Trade (Click Buttons)</span>
             </label>
-        </div>
-
-        <div class="divider" style="margin: 15px 0;"></div>
-
-        <div class="section-label">📡 Data Collection</div>
-        <div class="toggle-row" style="margin-bottom: 8px; margin-top: 5px;">
-            <label class="toggle-label" for="enableDataCollection">
-                <input type="checkbox" id="enableDataCollection">
-                <span class="toggle-text">Save Candles to Backend</span>
-            </label>
-        </div>
-        <div class="input-group" style="margin-bottom: 15px;">
-            <label for="serverUrl">Backend Server URL <span class="hint">(Local ya Hosted)</span></label>
-            <input type="text" id="serverUrl" placeholder="http://localhost:8000">
         </div>
 
         <div class="divider" style="margin: 15px 0;"></div>
